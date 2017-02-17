@@ -60,3 +60,14 @@ impl ContainerListOptions {
         params.finish()
     }
 }
+
+#[derive(Debug, Clone, Default)]
+pub struct ExecOptions {
+    pub detach_keys: String,
+    pub interactive: bool,
+    pub tty:         bool,
+    pub detach:      bool,
+    pub user:        String,
+    pub privileged:  bool,
+    pub env:         Vec<String>
+}

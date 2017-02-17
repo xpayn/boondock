@@ -18,6 +18,11 @@ error_chain! {
             display("could not fetch information about container '{}'", &id)
         }
 
+        ExecConfig(id: String) {
+            description("could not create exec configuration for a container")
+            display("could not create exec configuration for container '{}'", &id)
+        }
+
         CouldNotConnect(host: String) {
             description("could not connect to Docker")
             display("could not connected to Docker at '{}'", &host)

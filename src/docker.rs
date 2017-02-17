@@ -86,6 +86,7 @@ impl Docker {
         // Dispatch to the correct connection function.
         let mkerr = || ErrorKind::CouldNotConnect(host.clone());
         if host.starts_with("unix://") {
+            println!("{}", host);
             Docker::connect_with_unix(&host).chain_err(&mkerr)
         } else if host.starts_with("tcp://") {
             if tls_verify {
@@ -204,6 +205,7 @@ impl Docker {
 
     fn execute_request(&self, request: RequestBuilder) -> Result<String> {
         let mut response = try!(request.send());
+        println!("{:?}", response);
         assert!(response.status.is_success());
 
         let mut body = String::new();
@@ -227,8 +229,10 @@ impl Docker {
         where T: Decodable
     {
         let request_url = self.get_url(url);
+        println!("{}", request_url);
         let request = self.build_get_request(&request_url);
         let body = try!(self.execute_request(request));
+        println!("{}", body);
         let info = try!(json::decode::<T>(&body)
             .chain_err(|| ErrorKind::ParseError(type_name, body)));
         Ok(info)
@@ -362,5 +366,49 @@ impl Docker {
 
     pub fn version(&self) -> Result<Version> {
         self.decode_url("Version", "/version")
+    }
+
+    pub fn exec(&self, container: &Container, opts: ExecOptions, cmd: String) -> Result<()> {
+        let mut opts: ExecConfig = opts.into();
+        opts.Cmd.push(cmd.clone());
+        let request_url = self.get_url(&format!("v1.26/containers/{}/exec", container.Id));
+        let json = json::encode(&opts).chain_err(|| "TODO")?;
+        println!("{}", json);
+        let request = self.build_post_request(&request_url).body(json.as_str());
+        let body = try!(self.execute_request(request));
+        let exec_config: ExecConfig = self.decode_url::<ExecConfig>("ExecConfig", &body)
+            .chain_err(|| ErrorKind::ExecConfig(container.Id.clone()))?;
+        Ok(())
+    }
+}
+#[derive(Debug, Clone, RustcEncodable, RustcDecodable)]
+#[allow(non_snake_case)]
+struct ExecConfig {
+	User:         String,   // User that will run the command
+	Privileged:   bool,     // Is the container in privileged mode
+	Tty:          bool,     // Attach standard Streams to a tty.
+	AttachStdin:  bool,     // Attach the standard input, makes possible user interaction
+	AttachStderr: bool,     // Attach the standard error
+	AttachStdout: bool,     // Attach the standard output
+	Detach:       bool,     // Execute in detach mode
+	DetachKeys:   String,   // Escape keys for detach
+	Env:          Option<Vec<String>>, // Environment variables
+	Cmd:          Vec<String>, // Execution commands and args
+}
+
+impl From<ExecOptions> for ExecConfig {
+    fn from(opts: ExecOptions) -> Self {
+        ExecConfig {
+            User:         opts.user,
+            Privileged:   opts.privileged,
+            Tty:          opts.tty,
+            AttachStdin:  !opts.detach && opts.interactive,
+            AttachStderr: !opts.detach,
+            AttachStdout: !opts.detach,
+            Detach:       opts.detach,
+            DetachKeys:   opts.detach_keys,
+            Env:          if opts.env.is_empty() {None} else {Some(opts.env)},
+            Cmd:          vec![]
+        }
     }
 }
